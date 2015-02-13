@@ -16,10 +16,10 @@ BEEP_CHARACTER = '\a'
 
 class ChangeHandler(FileSystemEventHandler):
     """Listens for changes to files and re-runs tests after each change."""
-    def __init__(self, directory=None, auto_clear=False, beep_on_failure=True,
+    def __init__(self, directories=[], auto_clear=False, beep_on_failure=True,
                  onpass=None, onfail=None, extensions=[]):
         super(ChangeHandler, self).__init__()
-        self.directory = os.path.abspath(directory or '.')
+        self.directories = directories
         self.auto_clear = auto_clear
         self.beep_on_failure = beep_on_failure
         self.onpass = onpass
@@ -30,13 +30,26 @@ class ChangeHandler(FileSystemEventHandler):
         if event.is_directory:
             return
         ext = os.path.splitext(event.src_path)[1].lower()
-        if ext in self.extensions:
+        is_watch_target = self.is_watch_target(event)
+        if ext in self.extensions and is_watch_target:
             self.run(event.src_path)
+
+    def is_watch_target(self, event):
+        relpath = os.path.relpath(event.src_path)
+        if not self.directories:  # if directories not specified,
+            return True           # any changed files are target
+        else:
+            for directory in self.directories:
+                directory = os.path.relpath(directory + os.sep)
+                if directory == '.' or \
+                   relpath.startswith(os.path.relpath(directory + os.sep)):
+                    return True
+            return False
 
     def run(self, filename=None):
         """Called when a file is changed to re-run the tests with nose."""
         if self.auto_clear:
-            subprocess.call(CLEAR_COMMAND, cwd=self.directory, shell=True)
+            subprocess.call(CLEAR_COMMAND, shell=True)
         elif filename:
             print()
             print(Fore.CYAN + 'Change detected in ' + filename + Fore.RESET)
@@ -44,7 +57,8 @@ class ChangeHandler(FileSystemEventHandler):
         print('Running unit tests...')
         if self.auto_clear:
             print()
-        exit_code = subprocess.call('py.test', cwd=self.directory, shell=True)
+        pytest_cmd = 'py.test %s' % ' '.join(self.directories)
+        exit_code = subprocess.call(pytest_cmd, shell=True)
         passed = exit_code == 0
 
         # Beep if failed
@@ -58,24 +72,24 @@ class ChangeHandler(FileSystemEventHandler):
             os.system(self.onfail)
 
 
-def watch(directory=None, auto_clear=False, beep_on_failure=True,
+def watch(directories=[], auto_clear=False, beep_on_failure=True,
           onpass=None, onfail=None, extensions=[]):
     """
     Starts a server to render the specified file or directory
     containing a README.
     """
-    if directory and not os.path.isdir(directory):
-        raise ValueError('Directory not found: ' + directory)
-    directory = os.path.abspath(directory or '')
+    for directory in directories:
+        if not os.path.isdir(directory):
+            raise ValueError('Directory not found: ' + directory)
 
     # Initial run
-    event_handler = ChangeHandler(directory, auto_clear, beep_on_failure,
+    event_handler = ChangeHandler(directories, auto_clear, beep_on_failure,
                                   onpass, onfail, extensions)
     event_handler.run()
 
     # Setup watchdog
     observer = Observer()
-    observer.schedule(event_handler, path=directory, recursive=True)
+    observer.schedule(event_handler, path=os.getcwd(), recursive=True)
     observer.start()
 
     # Watch and run tests until interrupted by user

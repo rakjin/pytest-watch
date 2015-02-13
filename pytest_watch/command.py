@@ -6,7 +6,7 @@ Implements the command-line interface for pytest-watch.
 
 
 Usage:
-  ptw [options] [<directory>]
+  ptw [options] [<directory> ...]
 
 Options:
   -h --help         Show this help.
