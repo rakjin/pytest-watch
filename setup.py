@@ -23,6 +23,9 @@ setup(
         'console_scripts': [
             'py.test.watch = pytest_watch.command:main',
             'ptw = pytest_watch.command:main',
-        ]
+        ],
+        'pytest11': [
+            'pytest_watch = pytest_watch.plugin',
+        ],
     },
 )
